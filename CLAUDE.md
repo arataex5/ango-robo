@@ -1,0 +1,28 @@
+# アンゴウロボ（ango-robo）
+
+ボードゲーム「チューリングマシン」のルールをベースにした推理パズルの PWA / APK。名称・見た目は完全オリジナル（公式の名称・アートワーク・問題データは使わない）。
+
+## 構成
+- Vite + React + TypeScript。`base: './'` で GitHub Pages と Capacitor の両対応
+- `src/core/` ルールエンジン（UI 非依存・テストあり）
+  - `criteria.ts` 要件カード全48種。`{B}{Y}{P}` は 青▲/黄■/紫● のプレースホルダ
+  - `problem.ts` 世界の列挙（唯一解＋全検証機が不可欠）、問題生成、マシンの記録（par）、☆評価
+- `src/game/session.ts` 1プレイの状態（ラウンド、質問、メモ）。純粋関数
+- `src/online/room.ts` オンラインのルーム状態（ホスト権威・純粋関数・テストあり）、`net.ts` PeerJS / `?mock=番号` の BroadcastChannel
+- `src/ui/` 画面。`src/store.ts` localStorage（キーは `ar.*.v1`）
+- `src/data/challenges.json` チャレンジ100問（`npm run gen:challenges` で再生成。シード固定）
+
+## 決めたこと
+- ☆評価：問題ごとの「マシンの記録」= 唯一解だけを知っている最適質問AIの期待検証数を四捨五入。以下で☆3、+2 まで☆2、それ以上☆1。誤答は失敗
+- 難易度：やさしい=カード1〜17 / ふつう=〜22（18〜22を1枚以上）/ むずかしい=〜48（23〜48を1枚以上）
+- チャレンジ：レベル1〜10 × 10問。全問開放
+- オンライン：2〜4人、5桁ルーム番号、ホストが問題を生成して配布。ラウンドごとに全員が「パス/解答」を宣言して同期。同ラウンド正解は検証数が少ない人の勝ち、誤答は脱落、最後の1人は不戦勝
+- 収録モードはまずクラシックのみ。エクストリーム／ナイトメアは後のサイクルで追加予定
+
+## 運用
+- Claude が接続フォルダに書き込み → arata が GitHub Desktop で Commit & Push
+- `.github/` は Claude から書けないため `github-workflows/` に置いてある → `.github/workflows/` に移動して使う
+- APK は GitHub Actions でビルド（android/ は CI で毎回生成、署名は `android-signing/debug.keystore` 固定）
+
+## コマンド
+`npm run dev` / `npm test` / `npm run build` / `npm run e2e`（`npm run preview` を別で起動してから）

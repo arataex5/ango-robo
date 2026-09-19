@@ -1,0 +1,70 @@
+# Android APK（デバッグ署名）をビルドする。
+# - android/ フォルダはリポジトリに置かず、毎回 Capacitor から生成する
+# - 署名は android-signing/debug.keystore に固定（毎回同じ署名なので上書きインストールできる）
+# - 完成した APK は Actions の Artifacts と、Releases の「latest-apk」に置かれる
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm run build
+
+      - name: Android プロジェクトを生成
+        run: |
+          npx cap add android
+          npx --yes @capacitor/assets generate --android
+          npx cap sync android
+
+      - name: バージョン番号を設定（ビルド番号 = Actions の実行回数）
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/" android/app/build.gradle
+          sed -i "s/versionName \"1.0\"/versionName \"${VERSION}\"/" android/app/build.gradle
+
+      - name: 固定のデバッグ署名を使う
+        run: |
+          mkdir -p ~/.android
+          cp android-signing/debug.keystore ~/.android/debug.keystore
+
+      - name: APK をビルド
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: ファイル名を整える
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk ango-robo.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ango-robo-apk
+          path: ango-robo.apk
+
+      - name: Releases（latest-apk）に置く
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-apk
+          name: 最新の APK
+          body: main ブランチの最新ビルドです（ビルド番号 ${{ github.run_number }}）。
+          files: ango-robo.apk
+          prerelease: true
+          make_latest: false
