@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import challengesJson from './data/challenges.json';
-import { generateProblem, type Problem } from './core/problem';
+import { generateProblem, starsFor, thresholds, type Problem } from './core/problem';
 import { makeRng, randomSeed } from './core/rng';
 import type { Session } from './game/session';
 import {
@@ -109,7 +109,7 @@ export default function App() {
 function Home({ go }: { go: (s: Screen) => void }) {
   const saved = loadSession();
   const records = loadChallenge();
-  const totalStars = Object.values(records).reduce((a, r) => a + r.stars, 0);
+  const totalStars = Object.entries(records).reduce((a, [i, r]) => a + (CHALLENGES[Number(i)] ? starsFor(r.best, CHALLENGES[Number(i)]) : 0), 0);
   return (
     <div className="screen home">
       <div className="hero">
@@ -243,7 +243,7 @@ function History({ onExit, onRetry }: { onExit: () => void; onRetry: (id: string
                 <small>
                   {best ? (
                     <>
-                      ベスト 検証{best.questions}回（マシン {h.problem.par}回）・{h.plays.length}回プレイ
+                      ベスト 検証{best.questions}回（☆3は{thresholds(h.problem).star3}回まで）・{h.plays.length}回プレイ
                     </>
                   ) : last ? (
                     <>未クリア・{h.plays.length}回プレイ</>
@@ -253,7 +253,7 @@ function History({ onExit, onRetry }: { onExit: () => void; onRetry: (id: string
                 </small>
               </div>
               <div className="hist-side">
-                <Stars n={best?.stars ?? 0} />
+                <Stars n={best ? starsFor(best.questions, h.problem) : 0} />
                 <div className="hist-btns">
                   <button className="btn small primary" onClick={() => onRetry(h.id, h.problem)}>
                     再トライ
@@ -287,7 +287,8 @@ function ChallengeList({ onExit, onPlay }: { onExit: () => void; onPlay: (i: num
       <main className="page">
         {levels.map((l) => {
           const first = CHALLENGES[l * PER_LEVEL];
-          const stars = Array.from({ length: PER_LEVEL }, (_, k) => records[l * PER_LEVEL + k]?.stars ?? 0).reduce<number>((a, b) => a + b, 0);
+          const starOf = (i: number) => (records[i] ? starsFor(records[i].best, CHALLENGES[i]) : 0);
+          const stars = Array.from({ length: PER_LEVEL }, (_, k) => starOf(l * PER_LEVEL + k)).reduce<number>((a, b) => a + b, 0);
           return (
             <section className="level" key={l}>
               <h3>
@@ -304,7 +305,7 @@ function ChallengeList({ onExit, onPlay }: { onExit: () => void; onPlay: (i: num
                   return (
                     <button className={`tile ${r ? 'cleared' : ''}`} key={i} onClick={() => onPlay(i)}>
                       <strong>{i + 1}</strong>
-                      <Stars n={r?.stars ?? 0} />
+                      <Stars n={starOf(i)} />
                       <small>{r ? `${r.best}回` : '—'}</small>
                     </button>
                   );

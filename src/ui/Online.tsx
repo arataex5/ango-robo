@@ -84,7 +84,12 @@ export default function Online({ onExit }: { onExit: () => void }) {
 
 function useRoomState(room: RoomHandle): [RoomState | null, string | null] {
   const [, force] = useState(0);
-  useEffect(() => room.subscribe(() => force((n) => n + 1)), [room]);
+  useEffect(() => {
+    const off = room.subscribe(() => force((n) => n + 1));
+    // 画面の準備が終わる前に届いた状態を取りこぼさないよう、購読直後に一度描き直す
+    force((n) => n + 1);
+    return off;
+  }, [room]);
   return [room.getState(), room.getError()];
 }
 

@@ -18,7 +18,7 @@ const join = async (name) => {
   const p = await open(name);
   await p.getByPlaceholder('12345').fill('55555');
   await p.getByRole('button', { name: '参加する' }).click();
-  await p.waitForSelector('.roomcode');
+  await p.waitForSelector('.roomcode', { timeout: 8000 }).catch(async (e) => { console.log('JOIN FAIL:', (await p.locator('body').innerText()).slice(-200)); throw e; });
   return p;
 };
 const a = await join('はなこ');

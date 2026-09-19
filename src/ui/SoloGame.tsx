@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { cardById } from '../core/criteria';
-import { starsFor, type Problem } from '../core/problem';
+import { starsFor, thresholds, type Problem } from '../core/problem';
 import { newSession, questionCount, roundCount, submitGuess, type Session } from '../game/session';
 import { addPlay, recordChallenge, saveSession, type SessionSource } from '../store';
 import GameBoard from './GameBoard';
@@ -35,13 +35,14 @@ export default function SoloGame({ source, initial, title, sub, onExit, onNext }
     recorded.current = true;
     const questions = questionCount(s);
     const solved = s.status === 'won';
-    const stars = solved ? starsFor(questions, s.problem.par) : 0;
+    const stars = solved ? starsFor(questions, s.problem) : 0;
     if (source.kind === 'endless') addPlay(source.historyId, { at: Date.now(), questions, rounds: roundCount(s), solved, stars });
     else if (solved && stars) setNewRecord(recordChallenge(source.index, questions, stars));
   };
 
   const q = questionCount(session);
   const par = session.problem.par;
+  const { star3, star2 } = thresholds(session.problem);
   const won = session.status === 'won';
 
   return (
@@ -51,7 +52,7 @@ export default function SoloGame({ source, initial, title, sub, onExit, onNext }
         onChange={setSession}
         title={title}
         sub={sub}
-        par={par}
+        target={star3}
         onBack={onExit}
         mode="solo"
         onGuess={(code) => {
@@ -67,13 +68,15 @@ export default function SoloGame({ source, initial, title, sub, onExit, onNext }
             <h2>{won ? 'コード解読！' : 'ざんねん…'}</h2>
             {won ? (
               <>
-                <Stars n={starsFor(q, par)} big />
+                <Stars n={starsFor(q, session.problem)} big />
                 {newRecord && <div className="badge-new">★ 最高記録を更新！</div>}
                 <p className="result-stat">
                   検証 <b>{q}</b> 回（{roundCount(session)}ラウンド）
                   <br />
                   <small>
-                    マシンの記録 {par}回 → {q <= par ? 'マシンに勝利！' : q <= par + 2 ? `あと${q - par}回で☆3` : 'マシンに追いつこう'}
+                    ☆3は{star3}回まで・☆2は{star2}回まで
+                    <br />
+                    {q <= par ? `マシンの記録（${par}回）にも勝利！` : q <= star3 ? `参考：マシンの記録は${par}回` : `あと${q - star3}回へらせば☆3`}
                   </small>
                 </p>
               </>

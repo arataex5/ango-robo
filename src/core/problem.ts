@@ -1,5 +1,5 @@
 import { ALL_CODES, CARDS, cardById, type Code } from './criteria';
-import type { Rng } from './rng';
+import { makeRng, type Rng } from './rng';
 
 export type Difficulty = 'easy' | 'standard' | 'hard';
 
@@ -9,8 +9,11 @@ export interface Problem {
   secret: number[];
   code: Code;
   difficulty: Difficulty;
-  /** マシンの記録（この検証数以下で☆3） */
+  /** マシンの記録（最適に質問するAIの検証数。参考表示用） */
   par: number;
+  /** ☆3 / ☆2 をもらえる検証数の上限（人間のプレイを模したシミュレーションから算出） */
+  star3?: number;
+  star2?: number;
 }
 
 /** あり得る「世界」= 各検証機の要件の組合せ（唯一解＆全検証機が不可欠）とそのコード */
@@ -190,6 +193,144 @@ function greedyExpectedQuestions(worlds: World[], cards: number[]): number {
 }
 
 /**
+ * 人間のプレイを模したシミュレーション。
+ * - 1ラウンド = コードを1つ決め、答えがまだ読めない検証機に最大3回まで質問する（ルールどおり）
+ * - コードの選び方：ランダムに k 個思いつき、その中で「役に立つ質問が多くできる」ものを選ぶ
+ *   k=1 は気ままに選ぶ人、k が大きいほど慎重に選ぶ人
+ * - 推理は「解は1つだけ」を使う（マシンと同じ知識）。違いは質問の選び方が最適ではないこと
+ * 戻り値：解けるまでの平均検証数
+ */
+export function humanExpectedQuestions(cards: number[], k: number, samples = 24): number {
+  const worlds = enumerateWorlds(cards, false);
+  const n = worlds.length;
+  if (n === 0) return 0;
+  const nv = cards.length;
+  const rng = makeRng(cards.reduce((a, c) => (a * 53 + c) >>> 0, k * 7919 + 1));
+  const bit = (v: number, p: number, w: number) => {
+    const m = MASKS[cards[v]][worlds[w].crit[v]];
+    return (m[p >> 5] >>> (p & 31)) & 1;
+  };
+  const solved = (alive: number[]) => alive.every((w) => worlds[w].code === worlds[alive[0]].code);
+  const useful = (alive: number[], v: number, p: number) => {
+    const first = bit(v, p, alive[0]);
+    for (let i = 1; i < alive.length; i++) if (bit(v, p, alive[i]) !== first) return true;
+    return false;
+  };
+  const usefulCount = (alive: number[], p: number) => {
+    let c = 0;
+    for (let v = 0; v < nv; v++) if (useful(alive, v, p)) c++;
+    return Math.min(c, 3);
+  };
+
+  let total = 0;
+  const count = Math.min(samples, n);
+  for (let s = 0; s < count; s++) {
+    const truth = Math.floor((s * n) / count);
+    let alive = worlds.map((_, i) => i);
+    let q = 0;
+    while (!solved(alive) && q < 60) {
+      // コードを決める
+      let best = -1;
+      let bestScore = 0;
+      for (let i = 0; i < k; i++) {
+        const p = rng.int(0, 124);
+        const sc = usefulCount(alive, p);
+        if (sc > bestScore) {
+          bestScore = sc;
+          best = p;
+        }
+      }
+      if (best < 0) {
+        // 思いついたコードがどれも役に立たない → 役に立つコードを探す
+        for (let p = 0; p < 125 && best < 0; p++) if (usefulCount(alive, p) > 0) best = p;
+        if (best < 0) break;
+      }
+      // 同じコードで最大3回まで質問
+      let asked = 0;
+      const order = [...Array(nv).keys()].sort(() => rng.next() - 0.5);
+      for (const v of order) {
+        if (asked >= 3 || solved(alive)) break;
+        if (!useful(alive, v, best)) continue;
+        const a = bit(v, best, truth);
+        alive = alive.filter((w) => bit(v, best, w) === a);
+        asked++;
+        q++;
+      }
+    }
+    total += q;
+  }
+  return total / count;
+}
+
+/**
+ * 「地道に確かめる人」のシミュレーション。
+ * 「解は1つだけ」という裏読みを使わず、各検証機の要件を質問で1つずつ消していき、
+ * 残った要件の組合せで成り立つコードが1つになったら解答する。
+ */
+export function directExpectedQuestions(cards: number[], k: number, samples = 24): number {
+  const worlds = enumerateWorlds(cards); // 出題され得る正解の候補
+  const n = worlds.length;
+  if (n === 0) return 0;
+  const nv = cards.length;
+  const rng = makeRng(cards.reduce((a, c) => (a * 59 + c) >>> 0, k * 104729 + 3));
+  const has = (m: Bits, p: number) => (m[p >> 5] >>> (p & 31)) & 1;
+  let total = 0;
+  const count = Math.min(samples, n);
+  for (let s = 0; s < count; s++) {
+    const truth = worlds[Math.floor((s * n) / count)];
+    // remain[v] = まだ消えていない要件
+    const remain = cards.map((c) => MASKS[c].map((_, i) => i));
+    const candidates = () => {
+      let acc: Bits = FULL;
+      for (let v = 0; v < nv; v++) {
+        const u: Bits = [0, 0, 0, 0];
+        for (const i of remain[v]) {
+          const m = MASKS[cards[v]][i];
+          u[0] |= m[0]; u[1] |= m[1]; u[2] |= m[2]; u[3] |= m[3];
+        }
+        acc = and(acc, u);
+      }
+      return popcount(acc);
+    };
+    const useful = (v: number, p: number) => {
+      const first = has(MASKS[cards[v]][remain[v][0]], p);
+      return remain[v].some((i) => has(MASKS[cards[v]][i], p) !== first);
+    };
+    const usefulCount = (p: number) => {
+      let c = 0;
+      for (let v = 0; v < nv; v++) if (useful(v, p)) c++;
+      return Math.min(c, 3);
+    };
+    let q = 0;
+    while (candidates() > 1 && q < 80) {
+      let best = -1;
+      let bestScore = 0;
+      for (let i = 0; i < k; i++) {
+        const p = rng.int(0, 124);
+        const sc = usefulCount(p);
+        if (sc > bestScore) { bestScore = sc; best = p; }
+      }
+      if (best < 0) {
+        for (let p = 0; p < 125 && best < 0; p++) if (usefulCount(p) > 0) best = p;
+        if (best < 0) break;
+      }
+      let asked = 0;
+      const order = [...Array(nv).keys()].sort(() => rng.next() - 0.5);
+      for (const v of order) {
+        if (asked >= 3 || candidates() <= 1) break;
+        if (!useful(v, best)) continue;
+        const a = has(MASKS[cards[v]][truth.crit[v]], best);
+        remain[v] = remain[v].filter((i) => has(MASKS[cards[v]][i], best) === a);
+        asked++;
+        q++;
+      }
+    }
+    total += q;
+  }
+  return total / count;
+}
+
+/**
  * マシンの記録（par）。
  * マシンは「解は1つだけ」という知識を使って、期待検証数が最小になるように質問するAI。
  * ただし「どの検証機も不可欠」という上級テクニックは使わない（人間がこれを使えばマシンに勝てる余地がある）。
@@ -228,7 +369,7 @@ export function generateProblem(rng: Rng, nVerifiers: number, difficulty: Diffic
       secret: truth.crit,
       code: ALL_CODES[truth.code],
       difficulty,
-      par: machinePar(cards),
+      ...ratingFor(cards),
     };
   }
   throw new Error('問題を生成できませんでした');
@@ -247,6 +388,36 @@ export function isValidProblem(p: Problem): boolean {
 }
 
 export type Stars = 1 | 2 | 3;
-/** ☆評価：マシンの記録以下=3、+2まで=2、それ以上=1 */
-export const starsFor = (questions: number, par: number): Stars =>
-  questions <= par ? 3 : questions <= par + 2 ? 2 : 1;
+
+/**
+ * 評価基準（人間がプレイする想定）。
+ * - 「地道に確かめる人」= 平均的なプレイヤーの検証数 H
+ * - 「マシンと同じ推理ができる人」= 上級者の検証数 L
+ * ☆3：L と H の中間以下（平均より上手）／ ☆2：H + 1 以下（平均的）／ ☆1：それ以上
+ */
+export function ratingFor(cards: number[]): { par: number; star3: number; star2: number } {
+  const par = machinePar(cards);
+  const skilled = humanExpectedQuestions(cards, 3);
+  const average = directExpectedQuestions(cards, 2);
+  const star3 = Math.max(par + 1, Math.round((skilled + average) / 2));
+  const star2 = Math.max(star3 + 2, Math.round(average) + 1);
+  return { par, star3, star2 };
+}
+
+const ratingCache = new Map<string, { star3: number; star2: number }>();
+/** 問題の☆基準。古い保存データ（基準なし）はその場で計算する */
+export function thresholds(p: Problem): { star3: number; star2: number } {
+  if (p.star3 !== undefined && p.star2 !== undefined) return { star3: p.star3, star2: p.star2 };
+  const key = p.cards.join(',');
+  let hit = ratingCache.get(key);
+  if (!hit) {
+    hit = ratingFor(p.cards);
+    ratingCache.set(key, hit);
+  }
+  return hit;
+}
+
+export const starsFor = (questions: number, p: Problem): Stars => {
+  const t = thresholds(p);
+  return questions <= t.star3 ? 3 : questions <= t.star2 ? 2 : 1;
+};

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ALL_CODES, CARDS, codeStr } from './criteria';
-import { enumerateWorlds, generateProblem, isValidProblem, machinePar, starsFor, verify } from './problem';
+import { enumerateWorlds, generateProblem, isValidProblem, ratingFor, starsFor, verify } from './problem';
 import { makeRng } from './rng';
 import challenges from '../data/challenges.json';
 import type { Problem } from './problem';
@@ -53,13 +53,23 @@ describe('問題', () => {
     expect(list.length).toBe(100);
     for (const p of list) {
       expect(isValidProblem(p)).toBe(true);
-      expect(machinePar(p.cards)).toBe(p.par);
+      expect(ratingFor(p.cards)).toEqual({ par: p.par, star3: p.star3, star2: p.star2 });
     }
   });
   it('星評価', () => {
-    expect(starsFor(4, 5)).toBe(3);
-    expect(starsFor(5, 5)).toBe(3);
-    expect(starsFor(7, 5)).toBe(2);
-    expect(starsFor(8, 5)).toBe(1);
+    const p = { ...generateProblem(makeRng(3), 4, 'easy'), star3: 5, star2: 7 };
+    expect(starsFor(4, p)).toBe(3);
+    expect(starsFor(5, p)).toBe(3);
+    expect(starsFor(7, p)).toBe(2);
+    expect(starsFor(8, p)).toBe(1);
+    // 基準を持たない古い保存データでも計算できる
+    const old = { ...p, star3: undefined, star2: undefined };
+    expect(starsFor(1, old)).toBe(3);
+  });
+  it('人間向け基準はマシンの記録より必ずゆるい', () => {
+    for (const c of challenges as unknown as Problem[]) {
+      expect(c.star3!).toBeGreaterThan(c.par);
+      expect(c.star2!).toBeGreaterThanOrEqual(c.star3! + 2);
+    }
   });
 });

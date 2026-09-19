@@ -27,8 +27,8 @@ interface Props {
   /** online: 宣言済みで他の人を待っている */
   waiting?: boolean;
   roundLabel?: string;
-  /** マシンの記録（ソロのみ表示） */
-  par?: number;
+  /** ☆3をもらえる検証数の上限（ソロのみ表示） */
+  target?: number;
 }
 
 export function DigitPicker({
@@ -68,7 +68,7 @@ export function DigitPicker({
   );
 }
 
-export default function GameBoard({ session, onChange, title, sub, onBack, mode, onGuess, onPass, waiting, roundLabel, par }: Props) {
+export default function GameBoard({ session, onChange, title, sub, onBack, mode, onGuess, onPass, waiting, roundLabel, target }: Props) {
   const [memoMode, setMemoMode] = useState(false);
   const [guessing, setGuessing] = useState(false);
   const [guess, setGuess] = useState<Code>(session.draft);
@@ -100,7 +100,7 @@ export default function GameBoard({ session, onChange, title, sub, onBack, mode,
         <div className="counters">
           <span className="pill">{roundLabel ?? `ラウンド ${roundNo}`}</span>
           <span className="pill strong">
-            検証 {questionCount(session)}回{par !== undefined && <small> / マシン {par}回</small>}
+            検証 {questionCount(session)}回{target !== undefined && <small> / ★3は{target}回まで</small>}
           </span>
         </div>
       </header>
