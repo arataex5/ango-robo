@@ -1,6 +1,6 @@
 // オンライン対戦のルーム状態（ホストが唯一の正）。純粋関数なのでテスト可能。
 import type { Code } from '../core/criteria';
-import type { Difficulty, Problem } from '../core/problem';
+import type { Difficulty, Mode, Problem } from '../core/problem';
 
 export const MAX_PLAYERS = 4;
 
@@ -13,6 +13,7 @@ export interface PlayerInfo {
   guess: Code | null; // このラウンドで解答したコード（パスなら null）
 }
 export interface RoomSettings {
+  mode: Mode;
   verifiers: 4 | 5 | 6;
   difficulty: Difficulty;
 }
@@ -38,7 +39,7 @@ export type RoomEvent =
 
 export const initialRoom = (hostId: string, hostName: string): RoomState => ({
   phase: 'lobby',
-  settings: { verifiers: 4, difficulty: 'easy' },
+  settings: { mode: 'classic', verifiers: 4, difficulty: 'easy' },
   players: [{ id: hostId, name: hostName, status: 'active', done: false, questions: 0, guess: null }],
   hostId,
   gameNo: 0,

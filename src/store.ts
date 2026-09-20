@@ -1,5 +1,5 @@
 // localStorage への保存（プレイ履歴・チャレンジ記録・中断セーブ）
-import type { Problem, Stars } from './core/problem';
+import type { Mode, Problem, Stars } from './core/problem';
 import type { Session } from './game/session';
 
 export interface Play {
@@ -78,8 +78,9 @@ export const loadName = () => read<string>(K.name, '');
 export const saveName = (n: string) => write(K.name, n);
 
 export interface EndlessSettings {
+  mode: Mode;
   verifiers: 4 | 5 | 6;
   difficulty: Problem['difficulty'];
 }
-export const loadEndless = () => read<EndlessSettings>(K.endless, { verifiers: 4, difficulty: 'easy' });
+export const loadEndless = (): EndlessSettings => ({ mode: 'classic', verifiers: 4, difficulty: 'easy', ...read<Partial<EndlessSettings>>(K.endless, {}) });
 export const saveEndless = (s: EndlessSettings) => write(K.endless, s);

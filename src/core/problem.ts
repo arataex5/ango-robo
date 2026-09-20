@@ -2,10 +2,24 @@ import { ALL_CODES, CARDS, cardById, type Code } from './criteria';
 import { makeRng, type Rng } from './rng';
 
 export type Difficulty = 'easy' | 'standard' | 'hard';
+/**
+ * classic     : 検証機1台にカード1枚
+ * extreme     : 検証機1台にカード2枚（見ている要件は、2枚のどれか1つ）
+ * nightmare   : どの検証機がどのカードを担当しているか分からない
+ */
+export type Mode = 'classic' | 'extreme' | 'nightmare';
 
-/** 1問の定義。cards[i] が検証機 i(A..F) の要件カード、secret[i] がその検証機が実際に見ている要件の番号 */
+/**
+ * 1問の定義。
+ * classic  : cards[v] が検証機 v(A..F) のカード、secret[v] がその検証機が見ている要件の番号
+ * extreme  : cards[v] と cards2[v] の2枚。secret[v] は「cards[v] の要件 → cards2[v] の要件」と並べた通し番号
+ * nightmare: cards は場に並ぶカード（番号順）。perm[v] = 検証機 v が担当するカードの位置。secret[i] は cards[i] の要件番号
+ */
 export interface Problem {
+  mode?: Mode; // 省略時は classic（古い保存データ）
   cards: number[];
+  cards2?: number[];
+  perm?: number[];
   secret: number[];
   code: Code;
   difficulty: Difficulty;
@@ -23,23 +37,23 @@ export interface World {
 }
 
 // ---- 125bit ビットセット（32bit × 4） ----
-type Bits = [number, number, number, number];
-const and = (a: Bits, b: Bits): Bits => [a[0] & b[0], a[1] & b[1], a[2] & b[2], a[3] & b[3]];
-const isEmpty = (a: Bits) => (a[0] | a[1] | a[2] | a[3]) === 0;
+export type Bits = [number, number, number, number];
+export const and = (a: Bits, b: Bits): Bits => [a[0] & b[0], a[1] & b[1], a[2] & b[2], a[3] & b[3]];
+export const isEmpty = (a: Bits) => (a[0] | a[1] | a[2] | a[3]) === 0;
 const pop32 = (x: number) => {
   x = x - ((x >>> 1) & 0x55555555);
   x = (x & 0x33333333) + ((x >>> 2) & 0x33333333);
   return (((x + (x >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24;
 };
-const popcount = (a: Bits) => pop32(a[0]) + pop32(a[1]) + pop32(a[2]) + pop32(a[3]);
-const firstBit = (a: Bits) => {
+export const popcount = (a: Bits) => pop32(a[0]) + pop32(a[1]) + pop32(a[2]) + pop32(a[3]);
+export const firstBit = (a: Bits) => {
   for (let i = 0; i < 4; i++) if (a[i] !== 0) return i * 32 + (31 - Math.clz32(a[i] & -a[i]));
   return -1;
 };
-const FULL: Bits = [-1, -1, -1, (1 << 29) - 1]; // 125 = 96 + 29
+export const FULL: Bits = [-1, -1, -1, (1 << 29) - 1]; // 125 = 96 + 29
 
 /** MASKS[cardId][critIdx] = その要件を満たすコード集合 */
-const MASKS: Bits[][] = [];
+export const MASKS: Bits[][] = [];
 for (const card of CARDS) {
   MASKS[card.id] = card.criteria.map((cr) => {
     const m: Bits = [0, 0, 0, 0];
@@ -368,6 +382,7 @@ export function generateProblem(rng: Rng, nVerifiers: number, difficulty: Diffic
       cards,
       secret: truth.crit,
       code: ALL_CODES[truth.code],
+      mode: 'classic',
       difficulty,
       ...ratingFor(cards),
     };
@@ -376,8 +391,24 @@ export function generateProblem(rng: Rng, nVerifiers: number, difficulty: Diffic
 }
 
 /** 検証：提案コードが検証機 v の（秘密の）要件を満たすか */
-export const verify = (problem: Problem, v: number, proposal: Code): boolean =>
-  satisfies(problem.cards[v], problem.secret[v], proposal);
+export function verify(problem: Problem, v: number, proposal: Code): boolean {
+  const { card, crit } = secretOf(problem, v);
+  return satisfies(card, crit, proposal);
+}
+
+/** 検証機 v が実際に見ているカードと要件 */
+export function secretOf(problem: Problem, v: number): { card: number; crit: number } {
+  if (problem.mode === 'extreme' && problem.cards2) {
+    const lenA = cardById(problem.cards[v]).criteria.length;
+    const idx = problem.secret[v];
+    return idx < lenA ? { card: problem.cards[v], crit: idx } : { card: problem.cards2[v], crit: idx - lenA };
+  }
+  if (problem.mode === 'nightmare' && problem.perm) {
+    const i = problem.perm[v];
+    return { card: problem.cards[i], crit: problem.secret[i] };
+  }
+  return { card: problem.cards[v], crit: problem.secret[v] };
+}
 
 /** 問題データの整合性チェック（受信データやテスト用） */
 export function isValidProblem(p: Problem): boolean {
@@ -408,6 +439,7 @@ const ratingCache = new Map<string, { star3: number; star2: number }>();
 /** 問題の☆基準。古い保存データ（基準なし）はその場で計算する */
 export function thresholds(p: Problem): { star3: number; star2: number } {
   if (p.star3 !== undefined && p.star2 !== undefined) return { star3: p.star3, star2: p.star2 };
+  if (p.mode && p.mode !== 'classic') return { star3: p.par + 3, star2: p.par + 6 }; // 通常は保存済み。念のための保険
   const key = p.cards.join(',');
   let hit = ratingCache.get(key);
   if (!hit) {

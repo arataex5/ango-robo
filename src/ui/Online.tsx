@@ -3,6 +3,7 @@ import type { Code } from '../core/criteria';
 import { endRound, questionCount, type Session } from '../game/session';
 import { describeError, hostRoom, joinRoom, type RoomHandle } from '../online/net';
 import { MAX_PLAYERS, type RoomState } from '../online/room';
+import { MODE_LABEL } from '../core/modes';
 import { loadName, saveName } from '../store';
 import GameBoard from './GameBoard';
 import Reveal from './Reveal';
@@ -167,6 +168,11 @@ function RoomView({ room, onLeave }: { room: RoomHandle; onLeave: () => void }) 
             {room.isHost ? (
               <>
                 <Seg
+                  value={state.settings.mode}
+                  options={(['classic', 'extreme', 'nightmare'] as const).map((m) => ({ value: m, label: MODE_LABEL[m] }))}
+                  onChange={(m) => room.setSettings({ ...state.settings, mode: m })}
+                />
+                <Seg
                   value={state.settings.verifiers}
                   options={[4, 5, 6].map((n) => ({ value: n as 4 | 5 | 6, label: `ロボ${n}台` }))}
                   onChange={(v) => room.setSettings({ ...state.settings, verifiers: v })}
@@ -179,7 +185,7 @@ function RoomView({ room, onLeave }: { room: RoomHandle; onLeave: () => void }) 
               </>
             ) : (
               <p>
-                ロボ{state.settings.verifiers}台・{DIFF_LABEL[state.settings.difficulty]}
+                {MODE_LABEL[state.settings.mode]}・ロボ{state.settings.verifiers}台・{DIFF_LABEL[state.settings.difficulty]}
               </p>
             )}
           </div>
@@ -215,7 +221,7 @@ function RoomView({ room, onLeave }: { room: RoomHandle; onLeave: () => void }) 
         session={session}
         onChange={setSession}
         title={`ルーム ${room.roomCode}`}
-        sub={me?.status === 'eliminated' ? '脱落しました（観戦中）' : `ロボ${state.settings.verifiers}台・${DIFF_LABEL[state.settings.difficulty]}`}
+        sub={me?.status === 'eliminated' ? '脱落しました（観戦中）' : `${MODE_LABEL[state.settings.mode]}・${state.settings.verifiers}台・${DIFF_LABEL[state.settings.difficulty]}`}
         onBack={onLeave}
         mode="online"
         roundLabel={`ラウンド ${state.round}`}

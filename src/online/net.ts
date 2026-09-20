@@ -1,7 +1,7 @@
 // 通信層。PeerJS（本番）と BroadcastChannel（?mock=1：同じブラウザのタブ同士で検証用）を同じ形で扱う。
 import type { DataConnection, Peer as PeerType } from 'peerjs';
 import type { Code } from '../core/criteria';
-import { generateProblem } from '../core/problem';
+import { generateAny } from '../core/modes';
 import { makeRng, randomSeed } from '../core/rng';
 import { initialRoom, redactFor, roomReduce, type RoomEvent, type RoomSettings, type RoomState } from './room';
 
@@ -240,7 +240,7 @@ export async function hostRoom(name: string): Promise<RoomHandle> {
       dispatch({ type: 'roundDone', id: HOST_ID, gameNo: state.gameNo, round: state.round, questions, guess }),
     setSettings: (settings) => dispatch({ type: 'settings', settings }),
     start: () => {
-      const problem = generateProblem(makeRng(randomSeed()), state.settings.verifiers, state.settings.difficulty);
+      const problem = generateAny(makeRng(randomSeed()), state.settings.mode, state.settings.verifiers, state.settings.difficulty);
       dispatch({ type: 'start', problem });
     },
     toLobby: () => dispatch({ type: 'toLobby' }),

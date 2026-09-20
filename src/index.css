@@ -997,3 +997,135 @@ p {
     transition: none !important;
   }
 }
+
+/* ---- エクストリーム / ナイトメア ---- */
+.critblock + .critblock {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 2.5px dashed #d9d2bd;
+}
+.crit-title {
+  font-size: 12.5px;
+  font-weight: 800;
+  margin-top: 6px;
+}
+.crit-title small {
+  color: var(--muted);
+  font-weight: 700;
+  margin-right: 4px;
+}
+.critblock .crits {
+  margin-top: 6px;
+}
+.nm-robots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.nm-robot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: var(--paper);
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  padding: 6px 8px 6px 6px;
+  box-shadow: 0 3px 0 var(--ink);
+}
+.nm-robot.ok {
+  background: #e3f9ec;
+}
+.nm-robot.ng {
+  background: #ffe9e9;
+}
+.btn.ask.sm {
+  padding: 7px 9px;
+  font-size: 13px;
+  border-radius: 12px;
+  box-shadow: 0 3px 0 var(--ink);
+}
+.verdict.sm {
+  width: 36px;
+  height: 36px;
+  font-size: 22px;
+}
+.nm-hint {
+  margin: -4px 2px;
+}
+.assign {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 2.5px dashed #d9d2bd;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+}
+.assign-btn {
+  width: 30px;
+  height: 30px;
+  border: 2.5px solid var(--ink);
+  border-radius: 50%;
+  background: #fff;
+  font-weight: 900;
+  font-size: 13px;
+  color: var(--ink);
+}
+.assign-btn.mk-x {
+  opacity: 0.35;
+  text-decoration: line-through;
+  background: #eee;
+}
+.assign-btn.mk-o {
+  background: #c9f5dc;
+  border-color: #1d9e59;
+  box-shadow: 0 0 0 2px #1d9e59;
+}
+.reveal-card {
+  color: var(--muted);
+  font-weight: 800;
+}
+.mode-tag {
+  display: inline-block;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  padding: 0 7px;
+  font-size: 10.5px;
+  font-weight: 900;
+  margin-right: 5px;
+  vertical-align: 1px;
+}
+.mode-tag.extreme {
+  background: #ffb84c;
+}
+.mode-tag.nightmare {
+  background: #c59bff;
+}
+.mode-tag.classic {
+  background: #bfe6ff;
+}
+.tabs {
+  display: flex;
+  gap: 8px;
+}
+/* 縦に長いページで、中身が押しつぶされないようにする */
+.page > *,
+.game-body > * {
+  flex-shrink: 0;
+}
+.topbar-title small {
+  white-space: normal;
+  line-height: 1.25;
+}
+/* ナイトメア：ロボの列は、カードを下まで見ていても押せるように上に固定 */
+.nm-robots {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--bg);
+  padding: 4px 0 8px;
+  margin: -4px 0 -4px;
+}

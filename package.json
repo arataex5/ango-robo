@@ -1,7 +1,7 @@
 {
   "name": "ango-robo",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,9 +9,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "oxlint",
-    "gen:challenges": "tsx scripts/gen-challenges.ts",
+    "gen:challenges": "tsx scripts/gen-challenges.ts && tsx scripts/gen-challenges-extra.ts",
     "icons": "node scripts/make-icons.mjs",
-    "e2e": "node e2e/solo.mjs && node e2e/online.mjs"
+    "e2e": "node e2e/solo.mjs && node e2e/modes.mjs && node e2e/online.mjs"
   },
   "dependencies": {
     "peerjs": "^1.5.5",

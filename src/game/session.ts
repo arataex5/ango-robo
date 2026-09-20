@@ -13,7 +13,8 @@ export interface Round {
 export type Mark = 0 | 1 | 2;
 export interface Notes {
   digits: Mark[][]; // [色][数字-1]
-  crit: Mark[][]; // [検証機][要件]
+  crit: Mark[][]; // [検証機][要件]（エクストリームは2枚ぶん通し番号、ナイトメアは [カード][要件]）
+  assign?: Mark[][]; // ナイトメア用：[カード][検証機]「このカードの担当はこのロボ？」のメモ
 }
 export interface Session {
   problem: Problem;
@@ -36,6 +37,7 @@ export function newSession(problem: Problem, critCounts: number[]): Session {
     notes: {
       digits: [0, 1, 2].map(() => [0, 0, 0, 0, 0]),
       crit: critCounts.map((n) => new Array<Mark>(n).fill(0)),
+      assign: problem.cards.map(() => new Array<Mark>(problem.cards.length).fill(0)),
     },
     status: 'playing',
   };
@@ -89,4 +91,11 @@ export function toggleCrit(s: Session, v: number, idx: number): Session {
   const crit = s.notes.crit.map((row) => row.slice());
   crit[v][idx] = cycle(crit[v][idx]);
   return { ...s, notes: { ...s.notes, crit } };
+}
+
+export function toggleAssign(s: Session, card: number, v: number): Session {
+  const n = s.problem.cards.length;
+  const assign = (s.notes.assign ?? s.problem.cards.map(() => new Array<Mark>(n).fill(0))).map((row) => row.slice());
+  assign[card][v] = cycle(assign[card][v]);
+  return { ...s, notes: { ...s.notes, assign } };
 }

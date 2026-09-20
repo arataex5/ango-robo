@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { cardById } from '../core/criteria';
+import { critCounts } from '../core/modes';
 import { starsFor, thresholds, type Problem } from '../core/problem';
 import { newSession, questionCount, roundCount, submitGuess, type Session } from '../game/session';
 import { addPlay, recordChallenge, saveSession, type SessionSource } from '../store';
@@ -8,7 +8,7 @@ import Reveal from './Reveal';
 import { Modal, Robot, Stars } from './bits';
 
 export const freshSession = (problem: Problem): Session =>
-  newSession(problem, problem.cards.map((id) => cardById(id).criteria.length));
+  newSession(problem, critCounts(problem));
 
 interface Props {
   source: SessionSource;

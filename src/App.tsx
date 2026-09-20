@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import challengesJson from './data/challenges.json';
-import { generateProblem, starsFor, thresholds, type Problem } from './core/problem';
+import extraJson from './data/challenges-extra.json';
+import { MODE_LABEL, generateAny, modeOf } from './core/modes';
+import { starsFor, thresholds, type Mode, type Problem } from './core/problem';
 import { makeRng, randomSeed } from './core/rng';
 import type { Session } from './game/session';
 import {
@@ -21,8 +23,22 @@ import Online from './ui/Online';
 import SoloGame, { freshSession } from './ui/SoloGame';
 import { DIFF_LABEL, Robot, Seg, Stars } from './ui/bits';
 
-const CHALLENGES = challengesJson as unknown as Problem[];
 const PER_LEVEL = 10;
+/** チャレンジのパック。記録のキーは offset + 問題番号（クラシックは従来どおり 0〜99） */
+const PACKS: { mode: Mode; offset: number; problems: Problem[]; prefix: string }[] = [
+  { mode: 'classic', offset: 0, problems: challengesJson as unknown as Problem[], prefix: 'No.' },
+  { mode: 'extreme', offset: 1000, problems: (extraJson as unknown as Record<string, Problem[]>).extreme, prefix: 'EX-' },
+  { mode: 'nightmare', offset: 2000, problems: (extraJson as unknown as Record<string, Problem[]>).nightmare, prefix: 'NM-' },
+];
+const packOf = (index: number) => PACKS.find((p) => index >= p.offset && index < p.offset + p.problems.length)!;
+const challengeAt = (index: number): Problem | undefined => packOf(index)?.problems[index - packOf(index).offset];
+const challengeName = (index: number) => `${packOf(index).prefix}${index - packOf(index).offset + 1}`;
+const MODE_HINT: Record<Mode, string> = {
+  classic: 'ロボ1台にカード1枚。基本のルール。',
+  extreme: 'ロボ1台にカードが2枚！ ロボが見ているのは、2枚の要件のうちどれか1つだけ。',
+  nightmare: 'どのロボがどのカードを担当しているか分からない！ 上級者向け。',
+};
+const TOTAL_CHALLENGES = PACKS.reduce((a, p) => a + p.problems.length, 0);
 export const APP_NAME = 'アンゴウロボ';
 
 type Screen =
@@ -56,12 +72,12 @@ export default function App() {
   }, []);
 
   const startEndless = (settings: EndlessSettings) => {
-    const problem = generateProblem(makeRng(randomSeed()), settings.verifiers, settings.difficulty);
+    const problem = generateAny(makeRng(randomSeed()), settings.mode, settings.verifiers, settings.difficulty);
     const item = addHistoryItem(problem);
     go({ name: 'game', source: { kind: 'endless', historyId: item.id }, session: freshSession(problem), key: Date.now() });
   };
   const startChallenge = (index: number) =>
-    go({ name: 'game', source: { kind: 'challenge', index }, session: freshSession(CHALLENGES[index]), key: Date.now() });
+    go({ name: 'game', source: { kind: 'challenge', index }, session: freshSession(challengeAt(index)!), key: Date.now() });
 
   switch (screen.name) {
     case 'home':
@@ -90,15 +106,15 @@ export default function App() {
           key={screen.key}
           source={source}
           initial={session}
-          title={isCh ? `チャレンジ No.${source.index + 1}` : 'エンドレス'}
-          sub={isCh ? `レベル${Math.floor(source.index / PER_LEVEL) + 1}` : `ロボ${p.cards.length}台・${DIFF_LABEL[p.difficulty]}`}
+          title={isCh ? `チャレンジ ${challengeName(source.index)}` : `エンドレス`}
+          sub={`${MODE_LABEL[modeOf(p)]}・${p.cards.length}台・${DIFF_LABEL[p.difficulty]}`}
           onExit={home}
           onNext={
             isCh
-              ? source.index + 1 < CHALLENGES.length
+              ? challengeAt(source.index + 1)
                 ? () => startChallenge(source.index + 1)
                 : undefined
-              : () => startEndless({ verifiers: p.cards.length as 4 | 5 | 6, difficulty: p.difficulty })
+              : () => startEndless({ mode: modeOf(p), verifiers: p.cards.length as 4 | 5 | 6, difficulty: p.difficulty })
           }
         />
       );
@@ -109,7 +125,10 @@ export default function App() {
 function Home({ go }: { go: (s: Screen) => void }) {
   const saved = loadSession();
   const records = loadChallenge();
-  const totalStars = Object.entries(records).reduce((a, [i, r]) => a + (CHALLENGES[Number(i)] ? starsFor(r.best, CHALLENGES[Number(i)]) : 0), 0);
+  const totalStars = Object.entries(records).reduce((a, [i, r]) => {
+    const p = challengeAt(Number(i));
+    return a + (p ? starsFor(r.best, p) : 0);
+  }, 0);
   return (
     <div className="screen home">
       <div className="hero">
@@ -130,7 +149,7 @@ function Home({ go }: { go: (s: Screen) => void }) {
             <span className="menu-ico">▶</span>
             <span>
               <strong>つづきから</strong>
-              <small>{saved.source.kind === 'challenge' ? `チャレンジ No.${saved.source.index + 1}` : 'エンドレス'} をプレイ中</small>
+              <small>{saved.source.kind === 'challenge' ? `チャレンジ ${challengeName(saved.source.index)}` : 'エンドレス'} をプレイ中</small>
             </span>
           </button>
         )}
@@ -146,7 +165,7 @@ function Home({ go }: { go: (s: Screen) => void }) {
           <span>
             <strong>ソロ：チャレンジ</strong>
             <small>
-              全{CHALLENGES.length}問・あつめた星 {totalStars}/{CHALLENGES.length * 3}
+              全{TOTAL_CHALLENGES}問・あつめた星 {totalStars}/{TOTAL_CHALLENGES * 3}
             </small>
           </span>
         </button>
@@ -195,6 +214,15 @@ function EndlessSetup({ onExit, onStart }: { onExit: () => void; onStart: (s: En
       <TopBar title="エンドレス" sub="ランダムな問題" onExit={onExit} />
       <main className="page">
         <div className="panel">
+          <h3>モード</h3>
+          <Seg
+            value={settings.mode}
+            options={(['classic', 'extreme', 'nightmare'] as const).map((m) => ({ value: m, label: MODE_LABEL[m] }))}
+            onChange={(m) => update({ ...settings, mode: m })}
+          />
+          <p className="hint">{MODE_HINT[settings.mode]}</p>
+        </div>
+        <div className="panel">
           <h3>ロボ（検証機）の数</h3>
           <Seg value={settings.verifiers} options={[4, 5, 6].map((n) => ({ value: n as 4 | 5 | 6, label: `${n}台` }))} onChange={(v) => update({ ...settings, verifiers: v })} />
           <h3>むずかしさ</h3>
@@ -235,10 +263,11 @@ function History({ onExit, onRetry }: { onExit: () => void; onRetry: (id: string
             <div className="hist" key={h.id}>
               <div className="hist-main">
                 <strong>
+                  <span className={`mode-tag ${modeOf(h.problem)}`}>{MODE_LABEL[modeOf(h.problem)]}</span>
                   ロボ{h.problem.cards.length}台・{DIFF_LABEL[h.problem.difficulty]}
                 </strong>
                 <small>
-                  {new Date(h.createdAt).toLocaleDateString('ja-JP')} ・カード {h.problem.cards.join(', ')}
+                  {new Date(h.createdAt).toLocaleDateString('ja-JP')} ・カード {[...h.problem.cards, ...(h.problem.cards2 ?? [])].sort((a, b) => a - b).join(', ')}
                 </small>
                 <small>
                   {best ? (
@@ -280,15 +309,36 @@ function History({ onExit, onRetry }: { onExit: () => void; onRetry: (id: string
 
 function ChallengeList({ onExit, onPlay }: { onExit: () => void; onPlay: (i: number) => void }) {
   const records = loadChallenge();
-  const levels = Array.from({ length: Math.ceil(CHALLENGES.length / PER_LEVEL) }, (_, l) => l);
+  const [tab, setTab] = useState<Mode>(() => {
+    try {
+      return (sessionStorage.getItem('ar.chtab') as Mode) || 'classic';
+    } catch {
+      return 'classic';
+    }
+  });
+  const pack = PACKS.find((p) => p.mode === tab) ?? PACKS[0];
+  const levels = Array.from({ length: Math.ceil(pack.problems.length / PER_LEVEL) }, (_, l) => l);
+  const starOf = (i: number) => (records[i] ? starsFor(records[i].best, challengeAt(i)!) : 0);
   return (
     <div className="screen">
-      <TopBar title="チャレンジ" sub="固定の100問・最高記録をめざそう" onExit={onExit} />
+      <TopBar title="チャレンジ" sub="固定の問題・最高記録をめざそう" onExit={onExit} />
       <main className="page">
+        <Seg
+          value={tab}
+          options={PACKS.map((p) => ({ value: p.mode, label: `${MODE_LABEL[p.mode]} ${p.problems.length}` }))}
+          onChange={(m) => {
+            setTab(m);
+            try {
+              sessionStorage.setItem('ar.chtab', m);
+            } catch {
+              /* 無視 */
+            }
+          }}
+        />
+        {tab !== 'classic' && <p className="hint">{MODE_HINT[tab]}</p>}
         {levels.map((l) => {
-          const first = CHALLENGES[l * PER_LEVEL];
-          const starOf = (i: number) => (records[i] ? starsFor(records[i].best, CHALLENGES[i]) : 0);
-          const stars = Array.from({ length: PER_LEVEL }, (_, k) => starOf(l * PER_LEVEL + k)).reduce<number>((a, b) => a + b, 0);
+          const first = pack.problems[l * PER_LEVEL];
+          const stars = Array.from({ length: PER_LEVEL }, (_, k) => starOf(pack.offset + l * PER_LEVEL + k)).reduce<number>((a, b) => a + b, 0);
           return (
             <section className="level" key={l}>
               <h3>
@@ -300,11 +350,11 @@ function ChallengeList({ onExit, onPlay }: { onExit: () => void; onPlay: (i: num
               </h3>
               <div className="tiles">
                 {Array.from({ length: PER_LEVEL }, (_, k) => {
-                  const i = l * PER_LEVEL + k;
+                  const i = pack.offset + l * PER_LEVEL + k;
                   const r = records[i];
                   return (
                     <button className={`tile ${r ? 'cleared' : ''}`} key={i} onClick={() => onPlay(i)}>
-                      <strong>{i + 1}</strong>
+                      <strong>{l * PER_LEVEL + k + 1}</strong>
                       <Stars n={starOf(i)} />
                       <small>{r ? `${r.best}回` : '—'}</small>
                     </button>

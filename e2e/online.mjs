@@ -25,14 +25,15 @@ const a = await join('はなこ');
 const b = await join('じろう');
 await host.waitForFunction(() => document.querySelectorAll('.players li').length === 3);
 await host.getByRole('radio', { name: 'ロボ5台' }).click();
+await host.getByRole('radio', { name: process.env.MODE || 'クラシック' }).click();
 await host.screenshot({ path: 'shots/20-lobby-host.png' });
 await a.waitForFunction(() => document.body.innerText.includes('ロボ5台'));
 await a.screenshot({ path: 'shots/21-lobby-guest.png' });
 await host.getByText('ゲーム開始！').click();
 for (const p of [host, a, b]) await p.waitForSelector('.vcard');
-console.log('cards equal:', (await host.locator('.vtitle').allInnerTexts()).join() === (await b.locator('.vtitle').allInnerTexts()).join());
+console.log('cards equal:', (await host.locator('.vcard').allInnerTexts()).join() === (await b.locator('.vcard').allInnerTexts()).join());
 
-const askN = async (p, n) => { for (let i = 0; i < n; i++) await p.locator('.vcard').nth(i).getByText('検証', { exact: true }).click(); };
+const askN = async (p, n) => { for (let i = 0; i < n; i++) await p.getByRole('button', { name: '検証', exact: true }).first().click(); };
 const guess = async (p, code) => {
   await p.getByText('解答する！').click();
   for (let c = 0; c < 3; c++) await p.locator('.modal .picker-row').nth(c).locator('.pbtn').nth(code[c] - 1).click();

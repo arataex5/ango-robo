@@ -8,6 +8,7 @@ import {
   endRound,
   questionCount,
   setDraft,
+  toggleAssign,
   toggleCrit,
   toggleDigit,
   type Session,
@@ -75,6 +76,7 @@ export default function GameBoard({ session, onChange, title, sub, onBack, mode,
   const [confirmBack, setConfirmBack] = useState(false);
 
   const { problem } = session;
+  const mode3 = problem.mode ?? 'classic';
   const cur = currentRound(session);
   const lastRound = session.rounds[session.rounds.length - 1];
   const shown = cur ?? null;
@@ -106,51 +108,96 @@ export default function GameBoard({ session, onChange, title, sub, onBack, mode,
       </header>
 
       <main className="game-body">
-        <section className="verifiers">
-          {problem.cards.map((cardId, v) => {
-            const card = cardById(cardId);
-            const ans = shown?.answers.find((a) => a.v === v);
-            const askable = playing && canAsk(session, v);
-            return (
-              <article className={`vcard ${ans ? (ans.ok ? 'ok' : 'ng') : ''}`} key={v}>
-                <div className="vhead">
-                  <div className="vrobot">
-                    <Robot index={v} mood={ans ? (ans.ok ? 'ok' : 'ng') : 'idle'} size={46} />
-                    <span className="vletter">{LETTERS[v]}</span>
+        {mode3 === 'nightmare' ? (
+          <>
+            <section className="nm-robots">
+              {problem.cards.map((_, v) => {
+                const ans = shown?.answers.find((a) => a.v === v);
+                const askable = playing && canAsk(session, v);
+                return (
+                  <div className={`nm-robot ${ans ? (ans.ok ? 'ok' : 'ng') : ''}`} key={v}>
+                    <div className="vrobot">
+                      <Robot index={v} mood={ans ? (ans.ok ? 'ok' : 'ng') : 'idle'} size={42} />
+                      <span className="vletter">{LETTERS[v]}</span>
+                    </div>
+                    {ans ? (
+                      <span className={`verdict sm ${ans.ok ? 'ok' : 'ng'}`}>{ans.ok ? '○' : '×'}</span>
+                    ) : (
+                      <button className="btn ask sm" disabled={!askable} onClick={() => onChange(ask(session, v))}>
+                        検証
+                      </button>
+                    )}
                   </div>
-                  <div className="vtitle">
-                    <small>カード {card.id}</small>
-                    <strong>{card.title}</strong>
-                  </div>
-                  {ans ? (
-                    <span className={`verdict ${ans.ok ? 'ok' : 'ng'}`}>{ans.ok ? '○' : '×'}</span>
-                  ) : (
-                    <button className="btn ask" disabled={!askable} onClick={() => onChange(ask(session, v))}>
-                      検証
-                    </button>
-                  )}
-                </div>
-                <ul className="crits">
-                  {card.criteria.map((cr, i) => {
-                    const m = session.notes.crit[v]?.[i] ?? 0;
-                    return (
-                      <li key={i}>
-                        <button className={`crit ${m === 1 ? 'mk-x' : m === 2 ? 'mk-o' : ''}`} onClick={() => onChange(toggleCrit(session, v, i))}>
-                          <CritTextLine text={cr.text} />
+                );
+              })}
+            </section>
+            <p className="hint nm-hint">どのロボがどのカードを担当しているかはヒミツ！ カードの下の A〜F をタップして、担当ロボのメモ（×／○）がつけられます。</p>
+            <section className="verifiers">
+              {problem.cards.map((cardId, i) => (
+                <article className="vcard" key={i}>
+                  <CritList session={session} onChange={onChange} row={i} cardId={cardId} offset={0} showTitle />
+                  <div className="assign">
+                    <span>担当は？</span>
+                    {problem.cards.map((_, v) => {
+                      const m = session.notes.assign?.[i]?.[v] ?? 0;
+                      return (
+                        <button key={v} className={`assign-btn ${m === 1 ? 'mk-x' : m === 2 ? 'mk-o' : ''}`} onClick={() => onChange(toggleAssign(session, i, v))}>
+                          {LETTERS[v]}
                         </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </article>
-            );
-          })}
-        </section>
+                      );
+                    })}
+                  </div>
+                </article>
+              ))}
+            </section>
+          </>
+        ) : (
+          <section className="verifiers">
+            {problem.cards.map((cardId, v) => {
+              const card = cardById(cardId);
+              const card2 = mode3 === 'extreme' && problem.cards2 ? cardById(problem.cards2[v]) : null;
+              const ans = shown?.answers.find((a) => a.v === v);
+              const askable = playing && canAsk(session, v);
+              return (
+                <article className={`vcard ${ans ? (ans.ok ? 'ok' : 'ng') : ''}`} key={v}>
+                  <div className="vhead">
+                    <div className="vrobot">
+                      <Robot index={v} mood={ans ? (ans.ok ? 'ok' : 'ng') : 'idle'} size={46} />
+                      <span className="vletter">{LETTERS[v]}</span>
+                    </div>
+                    <div className="vtitle">
+                      {card2 ? (
+                        <>
+                          <small>カード {card.id} ＋ カード {card2.id}</small>
+                          <strong>2枚のうち、どれか1つだけ</strong>
+                        </>
+                      ) : (
+                        <>
+                          <small>カード {card.id}</small>
+                          <strong>{card.title}</strong>
+                        </>
+                      )}
+                    </div>
+                    {ans ? (
+                      <span className={`verdict ${ans.ok ? 'ok' : 'ng'}`}>{ans.ok ? '○' : '×'}</span>
+                    ) : (
+                      <button className="btn ask" disabled={!askable} onClick={() => onChange(ask(session, v))}>
+                        検証
+                      </button>
+                    )}
+                  </div>
+                  <CritList session={session} onChange={onChange} row={v} cardId={card.id} offset={0} showTitle={!!card2} />
+                  {card2 && <CritList session={session} onChange={onChange} row={v} cardId={card2.id} offset={card.criteria.length} showTitle />}
+                </article>
+              );
+            })}
+          </section>
+        )}
 
         <section className="log">
           <h3>きろく</h3>
           {session.rounds.length === 0 ? (
-            <p className="hint">コードを決めて、ロボの「検証」をタップ。1ラウンドに同じコードで3回まで質問できます。要件をタップすると ×／○ のメモがつけられます。</p>
+            <p className="hint">コードを決めて、ロボの「検証」をタップ。1ラウンドに同じコードで3回まで質問できます。要件をタップすると ×／○ のメモがつけられます。{mode3 === 'extreme' && ' エクストリーム：ロボは2枚のカードの要件のうち、どれか1つだけを見ています。'}</p>
           ) : (
             <table>
               <thead>
@@ -278,6 +325,46 @@ export default function GameBoard({ session, onChange, title, sub, onBack, mode,
           </div>
         </Modal>
       )}
+    </div>
+  );
+}
+
+/** カード1枚ぶんの要件リスト（タップで ×／○ メモ）。offset はメモ配列内の開始位置 */
+function CritList({
+  session,
+  onChange,
+  row,
+  cardId,
+  offset,
+  showTitle,
+}: {
+  session: Session;
+  onChange: (s: Session) => void;
+  row: number;
+  cardId: number;
+  offset: number;
+  showTitle?: boolean;
+}) {
+  const card = cardById(cardId);
+  return (
+    <div className="critblock">
+      {showTitle && (
+        <div className="crit-title">
+          <small>カード {card.id}</small> {card.title}
+        </div>
+      )}
+      <ul className="crits">
+        {card.criteria.map((cr, i) => {
+          const m = session.notes.crit[row]?.[offset + i] ?? 0;
+          return (
+            <li key={i}>
+              <button className={`crit ${m === 1 ? 'mk-x' : m === 2 ? 'mk-o' : ''}`} onClick={() => onChange(toggleCrit(session, row, offset + i))}>
+                <CritTextLine text={cr.text} />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
